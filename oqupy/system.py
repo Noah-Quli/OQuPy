@@ -902,6 +902,78 @@ class MeanFieldSystem(BaseAPIClass):
         """The field equation of motion. """
         return copy(self._field_eom)
 
+#Noah's edited code#
+class LatticeMeanFieldSystem(BaseAPIClass):
+    r"""
+    Collection of lattice sites with self-consistent mean field.
+
+    The self-consistency equation
+        <a>(t) = mean_field_fn(t, [rho(t)])
+    
+
+    Parameters
+    ----------
+    system_list : list[TimeDependentSystemWithMeanField]
+        Site objects.
+    mean_field_fn : callable
+        Self-consistency function f(t, [rho_i]) -> complex.
+    name : str, optional
+    description : str, optional
+    """
+
+    def __init__(
+        self,
+        system_list: List[TimeDependentSystemWithMeanField],
+        mean_field_fn: Callable[[float, List[ndarray]], complex],
+        name: Optional[Text] = None,
+        description: Optional[Text] = None,
+    ) -> None:
+        """Create a LatticeMeanFieldSystem."""
+        super().__init__(name, description)
+
+        self._system_list = _check_lattice_mean_field_system_list(system_list)
+
+        tmp_dim_list = [
+            sys.hamiltonian(1.0, 1.0 + 1.0j).shape[0]
+            for sys in self._system_list
+        ]
+        self._mean_field_fn = _check_mean_field_fn(tmp_dim_list, mean_field_fn)
+
+    def compute_field(
+        self,
+        t: float,
+        rho_list: List[ndarray],
+    ) -> complex:
+        """
+        Compute the self-consistent field directly.
+
+        
+
+        Parameters
+        ----------
+        t : float
+            Current time.
+        rho_list : list[ndarray]
+            Current density matrices.
+
+        Returns
+        -------
+        field : complex
+            Self-consistent field value.
+        """
+        return self._mean_field_fn(t, rho_list)
+
+    @property
+    def system_list(self) -> List[TimeDependentSystemWithMeanField]:
+        """The list of site systems."""
+        return self._system_list
+
+    @property
+    def mean_field_fn(self) -> Callable[[float, List[ndarray]], complex]:
+        """The self-consistency function f(t, [rho_i]) -> complex."""
+        return copy(self._mean_field_fn)
+# end # 
+
 class SystemChain(BaseAPIClass):
     """
     Represents a 1D chain of systems with nearest neighbor interactions.
@@ -1353,3 +1425,45 @@ def _create_density_matrix(dim, seed=1):
     b = np.matmul(a, a.conj().T)
     rho = b / b.trace()
     return rho
+# Noah's edited code - new validators #
+def _check_lattice_mean_field_system_list(
+    system_list: list,
+) -> List[TimeDependentSystemWithMeanField]:
+    """Validate that system_list contains TimeDependentSystemWithMeanField objects."""
+    assert isinstance(system_list, list), (
+        "Parameter system_list must be a list of "
+        "TimeDependentSystemWithMeanField objects."
+    )
+    assert len(system_list) > 0, (
+        "Parameter system_list must contain at least one "
+        "TimeDependentSystemWithMeanField object."
+    )
+    for i, obj in enumerate(system_list):
+        assert isinstance(obj, TimeDependentSystemWithMeanField), (
+            f"Element {i} of system_list is a {type(obj).__name__}, "
+            "but must be a TimeDependentSystemWithMeanField object. "
+            "Plain TimeDependentSystemWithField objects are not accepted "
+            "because they have a different propagators() signature."
+        )
+    return system_list
+
+
+def _check_mean_field_fn(
+    dim_list: List[int],
+    mean_field_fn: Callable,
+) -> Callable[[float, List[ndarray]], complex]:
+    """Validate the self-consistency function."""
+    test_rho_list = [_create_density_matrix(dim) for dim in dim_list]
+    try:
+        value = mean_field_fn(1.0, test_rho_list)
+        complex(value)
+    except Exception as e:
+        raise AssertionError(
+            "mean_field_fn must be callable with signature "
+            "f(t: float, rho_list: List[ndarray]) -> complex, "
+            "where rho_list contains square matrices with shapes "
+            + str([f"({d}, {d})" for d in dim_list])
+            + f". Got exception: {e}"
+        ) from e
+    return mean_field_fn
+# end #
