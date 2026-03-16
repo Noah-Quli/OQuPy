@@ -475,6 +475,299 @@ def compute_dynamics_with_field(
                 times=list(times), system_states_list=system_states_list,
                 fields=field_list)
 
+# Noah's edited code #
+def compute_dynamics_with_neighbours(
+        mean_field_system: LatticeMeanFieldSystem,
+        initial_field: complex,
+        process_tensor_list: Optional[List[
+            Union[BaseProcessTensor, List[BaseProcessTensor]] ]] = None,
+        dt: Optional[float] = None,
+        num_steps: Optional[int] = None,
+        initial_state_list: Optional[List[ndarray]] = None,
+        start_time: Optional[float] = 0.0,
+        control_list: Optional[List[Control]] = None,
+        record_all: Optional[bool] = True,
+        subdiv_limit: Optional[int] = SUBDIV_LIMIT,
+        liouvillian_epsrel: Optional[float] = INTEGRATE_EPSREL,
+        progress_type: Optional[Text] = None) -> MeanFieldDynamics:
+    """
+    Compute each system and field dynamics for a MeanFieldSystem
+    with (optional) process tensors for each system to account for their
+    interaction with their environment.
+
+    Parameters
+    ----------
+    mean_field_system: LatticeMeanFieldSystem
+        The `LatticeMeanFieldSystem` representing the collection of time-dependent
+        systems and their lattice neighbours.
+    initial_field: complex
+        The initial field value.
+    process_tensor_list: List[Union[List[BaseProcessTensor],BaseProcessTensor]]
+        Process tensors for each system. Each element can be a BaseProcessTensor
+        or a list of BaseProcessTensors for the respective system.
+    dt: float
+        Length of a single time step.
+    initial_state_list: List[ndarray]
+        List of initial density matrices, one for each system in the
+        mean-field system.
+    start_time: float (default = 0.0)
+        Optional start time offset.
+    num_steps: int
+        Optional number of time steps to be computed.
+    control_list: List[Control]
+        Optional list of control operations.
+    record_all: bool
+        If `false` function only computes the final state.
+    subdiv_limit: int (default = config.SUBDIV_LIMIT)
+        The maximum number of subdivisions used during the adaptive
+        algorithm when integrating the system Liouvillian. If None
+        then the Liouvillian is not integrated but sampled twice to
+        to construct the system propagators at each timestep.
+    liouvillian_epsrel: float (default = config.INTEGRATE_EPSREL)
+        The relative error tolerance for the adaptive algorithm
+        when integrating the system Liouvillian.
+    progress_type: str (default = None)
+        The progress report type during the computation. Types are:
+        {``silent``, ``simple``, ``bar``}. If `None` then
+        the default progress type is used.
+
+    Returns
+    -------
+    dynamics_with_field: MeanFieldDynamics
+        The instance of `MeanFieldDynamics` describing each system
+        dynamics and the field dynamics accounting for the interaction with
+        the environment.
+    """
+
+    # initialize objects as lists where necessary
+    initial_field = check_convert(initial_field, complex, "initial_field")
+
+    assert isinstance(mean_field_system, LatticeMeanFieldSystem), \
+            "Argument 'mean_field_system' must be an instance of " \
+            "LatticeMeanFieldSystem."
+
+    number_of_systems = len(mean_field_system.system_list)
+    assert number_of_systems > 0, "Argument 'mean_field_system.system_list' "\
+            "must contain at least one instance of MeanFieldSystem"
+
+    if initial_state_list is None:
+        initial_state_list = [None] * number_of_systems
+
+    if control_list is None:
+        control_list = [None] * number_of_systems
+
+    if process_tensor_list is None:
+        process_tensor_list = [None] * number_of_systems
+
+
+    # -- input parsing --
+    # check that lengths of lists provided are consistent
+    assert number_of_systems == len(initial_state_list) \
+            == len(control_list),\
+                f"The length of initial_state_list "\
+                f"({len(initial_state_list)}) and control_list "\
+                f"({len(control_list)}) must match the number of "\
+                f"systems ({len(mean_field_system.system_list)}) in "\
+                f"mean_field_system."
+
+    assert isinstance(process_tensor_list, list), "process_tensor_list must "\
+            "be a (possibly nested) list of BaseProcessTensor objects."
+    assert len(process_tensor_list) == len(mean_field_system.system_list), \
+            f"The length of process_tensor_list ({len(process_tensor_list)}) "\
+            "must match the number of systems "\
+            f"({len(mean_field_system.system_list)}) in mean_field_system."
+
+    # list of tuples in the order: system, initial_state, dt, num_steps,
+    # start_time, process_tensors, control, record_all, hs_dim
+    parsed_parameters_tuple_list =  \
+            [_compute_dynamics_input_parse(True, system, initial_state, dt,
+                num_steps, start_time, process_tensor, control, record_all)
+                for system, initial_state, process_tensor, control
+                in zip(mean_field_system.system_list, initial_state_list,
+                    process_tensor_list, control_list)]
+
+    # parameter names returned by _compute_dynamics_input_parse()
+    parsed_parameter_names = ["system", "initial_state", "dt", "num_steps",
+                              "start_time", "process_tensors", "control",
+                              "record_all", "hs_dim"]
+
+    # create dictionary for parsed parameters with each key being a parameter
+    # corresponding to a relevant list as its value
+    parsed_parameters_dict = {}
+    for i, parsed_parameter_name in enumerate(parsed_parameter_names):
+        parsed_parameters_dict[parsed_parameter_name] = []
+        for parsed_parameter_tuple in parsed_parameters_tuple_list:
+            parsed_parameters_dict[parsed_parameter_name].append(
+                    parsed_parameter_tuple[i])
+
+    num_steps = parsed_parameters_dict["num_steps"][0]
+    dt = parsed_parameters_dict["dt"][0]
+    record_all = parsed_parameters_dict["record_all"][0]
+    num_envs_list = [len(process_tensors) for process_tensors
+                     in parsed_parameters_dict["process_tensors"]]
+
+    propagators_list = [system.get_propagators(dt, start_time, subdiv_limit,
+                                         liouvillian_epsrel)
+                        for system in parsed_parameters_dict["system"]]
+
+    # -- prepare compute field - modified for analagous expectation values --
+    def compute_expectation(t: float, dt: float, state_list: List[ndarray],
+            field: complex, next_state_list: List[ndarray]):
+                return lattice_system.compute_expectation(t, state_list)
+        
+
+    # -- prepare controls --
+    def prepare_controls(step: int, control:Control):
+        return control.get_controls(
+            step,
+            dt=dt,
+            start_time=start_time)
+
+    # -- initialize computation --
+    #
+    #  Initial state including the bond legs to the environments with:
+    #    edges 0, 1, .., num_envs-1    are the bond legs of the environments
+    #    edge  -1                      is the state leg
+
+    nodes_and_edges_list = [] # list of tuples (current_nodes, current_edges)
+
+    for initial_state, hs_dim, num_envs \
+        in zip(parsed_parameters_dict["initial_state"],
+               parsed_parameters_dict["hs_dim"],
+               num_envs_list):
+        initial_ndarray = initial_state.reshape(hs_dim**2)
+        initial_ndarray.shape = tuple([1]*num_envs+[hs_dim**2])
+        current_node = tn.Node(initial_ndarray)
+        current_edges = current_node[:]
+
+        nodes_and_edges_list.append((current_node, current_edges))
+
+    # initialize list to store system states and field at each time step
+    system_states_list = []
+    field_list = []
+    title = "--> Compute dynamics within lattice:"
+    prog_bar = get_progress(progress_type)(num_steps, title)
+    prog_bar.enter()
+
+    for step in range(num_steps+1):
+
+        # -- calculate time reached --
+        t = start_time + step * dt
+
+        # -- get pre & post measurement control list --
+        controls_tuple_list = [prepare_controls(step, control)
+                               for control in parsed_parameters_dict["control"]]
+
+        # -- apply pre measurement control --
+        nodes_and_edges_list = [
+            _apply_system_superoperator(
+                current_node, current_edges, pre_measurement_control) \
+                for (current_node, current_edges), (pre_measurement_control,_) \
+                in zip(nodes_and_edges_list, controls_tuple_list)
+        ]
+
+        if step == num_steps:
+            break
+
+        # -- extract current states -- update field --
+        caps_list = [_get_caps(process_tensors, step) for process_tensors
+                     in parsed_parameters_dict["process_tensors"]]
+
+        state_tensor_list = [_apply_caps(current_node, current_edges, caps)
+                             for (current_node, current_edges), caps
+                             in zip(nodes_and_edges_list, caps_list)]
+
+        state_list = [state_tensor.reshape((hs_dim, hs_dim))
+                      for state_tensor, hs_dim
+                      in zip(state_tensor_list,
+                             parsed_parameters_dict["hs_dim"])]
+
+        if step == 0:
+            field = initial_field
+        else:
+            field = compute_expectation(t, dt, previous_state_list, field, state_list)
+        previous_state_list = state_list
+        if record_all:
+            system_states_list.append(state_list)
+            field_list.append(field)
+
+        prog_bar.update(step)
+
+        # -- apply post measurement control --
+        nodes_and_edges_list = [
+            _apply_system_superoperator(
+                current_node, current_edges, post_measurement_control) \
+                for (current_node, current_edges), (_,post_measurement_control)\
+                in zip(nodes_and_edges_list, controls_tuple_list)
+        ]
+
+        # -- propagate one time step --
+        propagator_tuples_list = [propagators(step, field,
+                                mean_field_system.field_eom(t, state_list,
+                                                            field))
+                                for propagators in propagators_list]
+
+        pt_mpos_list = [_get_pt_mpos(process_tensors, step) for process_tensors
+                        in parsed_parameters_dict["process_tensors"]]
+
+
+        # first half propagator
+        nodes_and_edges_list = [_apply_system_superoperator(
+                                    current_node, current_edges,
+                                    first_half_prop)
+                                    for (current_node, current_edges), \
+                                        (first_half_prop, second_half_prop)
+                                    in zip(nodes_and_edges_list,
+                                           propagator_tuples_list)]
+
+        # PT-MPO
+        nodes_and_edges_list = [_apply_pt_mpos(current_node, current_edges,
+                                               pt_mpos)
+                                for (current_node, current_edges), pt_mpos
+                                in zip(nodes_and_edges_list, pt_mpos_list)]
+
+        # second half propagator
+        nodes_and_edges_list = [_apply_system_superoperator(
+                                    current_node, current_edges,
+                                    second_half_prop)
+                                for (current_node, current_edges), \
+                                        (first_half_prop, second_half_prop)
+                                in zip(nodes_and_edges_list,
+                                       propagator_tuples_list)]
+
+    # -- extract last states --
+    caps_list = [_get_caps(process_tensors, step) for process_tensors
+                 in parsed_parameters_dict["process_tensors"]]
+
+    state_tensor_list = [_apply_caps(current_node, current_edges, caps)
+                         for (current_node, current_edges), caps
+                         in zip(nodes_and_edges_list, caps_list)]
+
+    final_state_list = [state_tensor.reshape(hs_dim, hs_dim)
+                        for state_tensor, hs_dim
+                        in zip(state_tensor_list,
+                               parsed_parameters_dict["hs_dim"])]
+
+    system_states_list.append(final_state_list)
+
+    final_field = compute_expectation(t, dt, previous_state_list, field,
+                                final_state_list)
+    field_list.append(final_field)
+
+    prog_bar.update(num_steps)
+    prog_bar.exit()
+
+    # -- create dynamics object --
+    if record_all:
+        times = start_time + np.arange(len(system_states_list))*dt
+    else:
+        times = [start_time + len(system_states_list)*dt]
+
+    return MeanFieldDynamics(
+                times=list(times), system_states_list=system_states_list,
+                fields=field_list)
+
+# end # 
 def _compute_dynamics_input_parse(
         with_field, system, initial_state, dt, num_steps, start_time,
         process_tensor, control, record_all) -> tuple:
