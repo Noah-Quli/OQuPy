@@ -931,9 +931,24 @@ class LatticeMeanFieldSystem(BaseAPIClass):
 
         Returns
         -------
-        expectation value (effective field)
+               field_array : ndarray
+            Array of field values, shape (n_sites,).
+            - If mean_field_fn returns scalar: broadcast to all sites
+            - If mean_field_fn returns array: use directly
         """
-        return self._mean_field_fn(t, state_list)
+        result = self._mean_field_fn(t, state_list)
+        
+        # Always return array
+        if isinstance(result, (complex, np.complexfloating)):
+            # Scalar 
+            return np.full(self._n_sites, result, dtype=complex)
+        else:
+            # Already array - ensure it's ndarray and correct length
+            result = np.array(result, dtype=complex)
+            assert len(result) == self._n_sites, \
+                f"mean_field_fn returned array of length {len(result)}, " \
+                f"expected {self._n_sites}"
+            return result
 
     @property
     def system_list(self) -> List[TimeDependentSystemWithMeanField]:
