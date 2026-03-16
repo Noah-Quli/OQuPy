@@ -499,8 +499,7 @@ class TimeDependentSystemWithNeighbours(BaseSystem):
                 - \frac{1}{2} \hat{A}_n^\dagger(t) \hat{A}_n(t) \rho(t)
                 - \frac{1}{2} \rho(t) \hat{A}_n^\dagger(t) \hat{A}_n(t) \right)
 
-    The ONLY difference is in get_propagators: the returned callable has
-    a different signature to account for self-consistent field dynamics.
+   
 
     Parameters
     ----------
@@ -516,163 +515,137 @@ class TimeDependentSystemWithNeighbours(BaseSystem):
 
   
      def __init__(
-             self,
-             hamiltonian: Callable[[float, complex], ndarray],
-             gammas: Optional[List[Callable[[float], float]]] = None,
-             lindblad_operators: Optional[List[Callable[[float], ndarray]]] = None,
-             name: Optional[Text] = None,
-             description: Optional[Text] = None) -> None:
-         self._hamiltonian = _check_tfielddependent_hamiltonian(hamiltonian)
-         tmp_dimension = self._hamiltonian(1.0, 1.0+1.0j).shape[0]
-         self._gammas, self._lindblad_operators = \
-              _check_tdependent_gammas_lindblad_operators(
-                      gammas, lindblad_operators)
-         super().__init__(tmp_dimension, name, description)
-    
- 
-     @staticmethod
-     def _linearised_field(t0: float, t: float,
-             field: complex,
-             field_derivative: complex):
-         return field + field_derivative * (t-t0)
-    
-    
-     def _linearised_hamiltonian(self, t0: float, t: float,
-             field: complex,
-             field_derivative: complex) -> complex:
-         return self._hamiltonian(t,
-                 self._linearised_field(t0, t, field, field_derivative))
-    
-   
-     def liouvillian(self,
-             t0: float,
-             t: float,
-             field: complex,
-             field_derivative: complex) -> ndarray:
-         # (validation code omitted for brevity)
-         hamiltonian = self._linearised_hamiltonian(t0, t, field,
-                                                    field_derivative)
-         gammas = [gamma(t) for gamma in self._gammas]
-         lindblad_operators = [l_op(t) for l_op in self._lindblad_operators]
-         return _liouvillian(hamiltonian, gammas, lindblad_operators)
-    
+            self,
+            hamiltonian: Callable[[float, complex], ndarray],
+            gammas: \
+                Optional[List[Callable[[float], float]]] = None,
+            lindblad_operators: \
+                Optional[List[Callable[[float], ndarray]]] = None,
+            name: Optional[Text] = None,
+            description: Optional[Text] = None) -> None:
+        """Create a TimeDependentSystemWithField object."""
 
+        # input check for Hamiltonian
+        self._hamiltonian = _check_tfielddependent_hamiltonian(hamiltonian)
+        tmp_dimension = self._hamiltonian(1.0, 1.0+1.0j).shape[0]
 
-    def get_propagators(self, dt, start_time, subdiv_limit, epsrel):
-        """
-        Prepare propagator functions for the system according to subdiv_limit.
+        # input check gammas and lindblad_operators
+        self._gammas, self._lindblad_operators = \
+             _check_tdependent_gammas_lindblad_operators(
+                     gammas,
+                     lindblad_operators)
 
-        This is the ONLY method that differs from the parent class.
+        super().__init__(tmp_dimension, name, description)
+
+    def _linearised_hamiltonian(self, t0: float, t: float,   # we remove the linearisation condition as current version of code does not see the benefit of linearising
+            field: complex,
+            field_derivative: complex) -> complex:
+        return self._hamiltonian(t,
+                self._linearised_field(t0, t, field, field_derivative))
+
+    @staticmethod
+    def _linearised_field(t0: float, t: float,
+            field: complex,
+            field_derivative: complex):
+        return field
+
+    def liouvillian(self,
+            t0: float,
+            t: float,
+            field: complex,
+            field_derivative: complex) -> ndarray:
+        r"""
+        Returns the Liouvillian super-operator
+        :math:`\mathcal{L}(t, \langle a \rangle)` such that
+
+        .. math::
+
+            \mathcal{L}(t, \langle a \rangle)\rho
+            = -i [\hat{H}(t, \langle a \rangle), \rho]
+                + \sum_n^N \gamma_n \left(
+                    \hat{A}_n(t) \rho \hat{A}_n^\dagger(t)
+                    - \frac{1}{2} \hat{A}_n^\dagger(t) \hat{A}_n(t) \rho
+                    - \frac{1}{2} \rho \hat{A}_n^\dagger(t) \hat{A}_n(t)
+                  \right),
+
+        with time :math:`t`.
+
+        Parameters
+        ----------
+        t0: float
+            Start time of the current step.
+        t: float
+            Current time :math:`t`.
+        field: complex
+            Field value at time :math:`t` obtained from the
+            linearisation of the field at :math:`t` using the field
+            equation of motion.
+        field_derivative: complex
+            Value of the time derivative of the field at time `t0`
 
         Returns
         -------
-        propagators : callable
-            A function with signature:
-                propagators(step, field_sc, field_prev)
-
-        The parent class returns a function with signature:
-            propagators(step, field, field_derivative)
-                
-        Parent: Caller provides field_derivative (from field ODE)
-        Child:  Propagators compute field_derivative internally from
-                finite difference: (field_sc - field_prev) / dt
+        liouvillian : ndarray
+            Liouvillian :math:`\mathcal{L}(t, \langle a \rangle)` at time
+            :math:`t` using a linearisation of the field `\langle a \rangle`
+            from its value at `t0` to time `t`.
         """
+        try:
+            t0 = float(t0)
+        except Exception as e:
+            raise TypeError("Argument t0 must be float") from e
+        try:
+            t = float(t)
+        except Exception as e:
+            raise TypeError("Argument t must be float") from e
+        assert t >= t0, "Argument t must equal or exceed t0"
+        try:
+            field = complex(field)
+        except Exception as e:
+            raise TypeError("Argument field must be complex") from e
+        try:
+            field_derivative = complex(field_derivative)
+        except Exception as e:
+            raise TypeError("Argument field_derivative must be complex") from e
+        hamiltonian = self._linearised_hamiltonian(t0, t, field,
+                                                   field_derivative)
+        gammas = [gamma(t) for gamma in self._gammas]
+        lindblad_operators = [l_op(t) for l_op in self._lindblad_operators]
+        return _liouvillian(hamiltonian, gammas, lindblad_operators)
+
+    def get_propagators(self, dt, start_time, subdiv_limit, epsrel):
+        """Prepare propagator functions for the system according to
+        subdiv_limit. """
         if subdiv_limit is None:
-            # Sample Liouvillian at dt/4, 3dt/4 to make propagators for
-            # first- and second-half timesteps
-            def propagators(step: int, field_sc: complex, field_prev: complex):
-                """
-                Create the system propagators (first and second half) for
-                the time step `step`.
-
-                Parameters
-                ----------
-                step : int
-                    Timestep number.
-                field_sc : complex
-                    Self-consistent field at time t = start_time + step*dt.
-                    This has been computed by LatticeMeanFieldSystem via:
-                        field_sc = mean_field_fn(t, [rho(t)])
-                field_prev : complex
-                    Self-consistent field from the previous timestep, used
-                    to estimate the time derivative for linearisation.
-
-                Returns
-                -------
-                first_step : ndarray
-                    Propagator for first half of timestep (d^2 x d^2 matrix).
-                second_step : ndarray
-                    Propagator for second half of timestep (d^2 x d^2 matrix).
-                """
+            # Sample Liouvillian at dt/4, 3dt/4 to make propagators for first-
+            # and second-half timesteps
+            def propagators(step: int, field: complex,
+                            field_derivative: complex):
                 t = start_time + step * dt
-                
-                # KEY DIFFERENCE: Compute derivative from consecutive fields
-              
-                field_derivative = (field_sc - field_prev) / dt if dt != 0.0 else 0j
-                
-                
-                first_step = expm(
-                    self.liouvillian(t, t + dt/4.0, field_sc, field_derivative)
-                    * dt / 2.0
-                )
-                second_step = expm(
-                    self.liouvillian(t, t + dt*3.0/4.0, field_sc, field_derivative)
-                    * dt / 2.0
-                )
+                first_step = expm(self.liouvillian(t, t+dt/4.0,
+                    field, field_derivative)*dt/2.0)
+                second_step = expm(self.liouvillian(t, t+dt*3.0/4.0,
+                    field, field_derivative)*dt/2.0)
                 return first_step, second_step
-                
         else:
-            # Integrate Liouvillian to make propagators for first and second-half timesteps
-            
-            def propagators(step: int, field_sc: complex, field_prev: complex):
-               
-                Parameters
-                ----------
-                step : int
-                    Timestep number.
-                field_sc : complex
-                    Self-consistent field at time t = start_time + step*dt.
-                field_prev : complex
-                    Self-consistent field from the previous timestep.
-
-                Returns
-                -------
-                first_step : ndarray
-                    Propagator for first half of timestep.
-                second_step : ndarray
-                    Propagator for second half of timestep.
-                
+            # Integrate Liouvillian to make propagators for first- and
+            # second-half timesteps
+            def propagators(step: int, field: complex,
+                            field_derivative: complex):
                 t = start_time + step * dt
-                
-                #  Compute derivative from consecutive fields
-                field_derivative = (field_sc - field_prev) / dt if dt != 0.0 else 0j
-                
-                # Create liouvillian function with the computed derivative
-                liouvillian = lambda tau: self.liouvillian(
-                    t, tau, field_sc, field_derivative
-                )
-                
-                # Integrate and exponentiate
-                first_step = expm(
-                    integrate.quad_vec(
-                        liouvillian,
-                        a=t,
-                        b=t + dt/2.0,
-                        epsrel=epsrel,
-                        limit=subdiv_limit
-                    )[0]
-                )
-                second_step = expm(
-                    integrate.quad_vec(
-                        liouvillian,
-                        a=t + dt/2.0,
-                        b=t + dt,
-                        epsrel=epsrel,
-                        limit=subdiv_limit
-                    )[0]
-                )
+                liouvillian = lambda tau: self.liouvillian(t, tau,
+                        field, field_derivative)
+                first_step = expm(integrate.quad_vec(liouvillian,
+                                                     a=t,
+                                                     b=t+dt/2.0,
+                                                     epsrel=epsrel,
+                                                     limit=subdiv_limit)[0])
+                second_step = expm(integrate.quad_vec(liouvillian,
+                                                      a=t+dt/2.0,
+                                                      b=t+dt,
+                                                      epsrel=epsrel,
+                                                      limit=subdiv_limit)[0])
                 return first_step, second_step
-                
         return propagators
 
     @property
@@ -939,13 +912,13 @@ class LatticeMeanFieldSystem(BaseAPIClass):
         ]
         self._mean_field_fn = _check_mean_field_fn(tmp_dim_list, mean_field_fn)
 
-    def compute_field(
+    def compute_expectation(
         self,
         t: float,
-        rho_list: List[ndarray],
+        state_list: List[ndarray],
     ) -> complex:
         """
-        Compute the self-consistent field directly.
+        Compute the expectation directly.
 
         
 
@@ -953,15 +926,14 @@ class LatticeMeanFieldSystem(BaseAPIClass):
         ----------
         t : float
             Current time.
-        rho_list : list[ndarray]
+        state_list : list[ndarray]
             Current density matrices.
 
         Returns
         -------
-        field : complex
-            Self-consistent field value.
+        expectation value (effective field)
         """
-        return self._mean_field_fn(t, rho_list)
+        return self._mean_field_fn(t, state_list)
 
     @property
     def system_list(self) -> List[TimeDependentSystemWithMeanField]:
