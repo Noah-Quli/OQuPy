@@ -504,7 +504,7 @@ class TimeDependentSystemWithNeighbours(BaseSystem):
     Parameters
     ----------
     hamiltonian : callable
-        Site Hamiltonian H(t, <a>) with signature (float, complex) -> ndarray.
+        Site Hamiltonian H(t, <a>) with signature (float, ndarray) -> ndarray.
     gammas : list(callable), optional
         Time-dependent decay rates gamma_n(t).
     lindblad_operators : list(callable), optional
@@ -516,7 +516,7 @@ class TimeDependentSystemWithNeighbours(BaseSystem):
   
      def __init__(
             self,
-            hamiltonian: Callable[[float, complex], ndarray],
+            hamiltonian: Callable[[float, ndarray], ndarray],
             gammas: \
                 Optional[List[Callable[[float], float]]] = None,
             lindblad_operators: \
@@ -620,7 +620,7 @@ class TimeDependentSystemWithNeighbours(BaseSystem):
         return propagators
 
     @property
-    def hamiltonian(self) -> Callable[[float, complex], ndarray]:
+    def hamiltonian(self) -> Callable[[float, ndarray], ndarray]:
         """The system Hamiltonian. """
         return copy(self._hamiltonian)
 
