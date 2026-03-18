@@ -536,24 +536,12 @@ class TimeDependentSystemWithNeighbours(BaseSystem):
                      lindblad_operators)
 
         super().__init__(tmp_dimension, name, description)
-
-    def _linearised_hamiltonian(self, t0: float, t: float,   # we remove the linearisation condition as current version of code does not see the benefit of linearising
-            field: complex,
-            field_derivative: complex) -> complex:
-        return self._hamiltonian(t,
-                self._linearised_field(t0, t, field, field_derivative))
-
-    @staticmethod
-    def _linearised_field(t0: float, t: float,
-            field: complex,
-            field_derivative: complex):
-        return field
+                
+    # removed linearisation conditions 
 
     def liouvillian(self,
-            t0: float,
             t: float,
-            field: complex,
-            field_derivative: complex) -> ndarray:
+            field: ndarray) -> ndarray:
         r"""
         Returns the Liouvillian super-operator
         :math:`\mathcal{L}(t, \langle a \rangle)` such that
@@ -572,43 +560,27 @@ class TimeDependentSystemWithNeighbours(BaseSystem):
 
         Parameters
         ----------
-        t0: float
-            Start time of the current step.
         t: float
             Current time :math:`t`.
-        field: complex
-            Field value at time :math:`t` obtained from the
-            linearisation of the field at :math:`t` using the field
-            equation of motion.
-        field_derivative: complex
-            Value of the time derivative of the field at time `t0`
+        field: ndarray
+            expecation value of neighbouring sites is an effective field in this case
+        `
 
         Returns
         -------
         liouvillian : ndarray
             Liouvillian :math:`\mathcal{L}(t, \langle a \rangle)` at time
-            :math:`t` using a linearisation of the field `\langle a \rangle`
-            from its value at `t0` to time `t`.
+            :math:`t` 
         """
-        try:
-            t0 = float(t0)
-        except Exception as e:
-            raise TypeError("Argument t0 must be float") from e
         try:
             t = float(t)
         except Exception as e:
             raise TypeError("Argument t must be float") from e
-        assert t >= t0, "Argument t must equal or exceed t0"
         try:
-            field = complex(field)
+            field = ndarray(field)
         except Exception as e:
-            raise TypeError("Argument field must be complex") from e
-        try:
-            field_derivative = complex(field_derivative)
-        except Exception as e:
-            raise TypeError("Argument field_derivative must be complex") from e
-        hamiltonian = self._linearised_hamiltonian(t0, t, field,
-                                                   field_derivative)
+            raise TypeError("Argument field must be array") from e
+        hamiltonian = self._hamiltonian(t, field)
         gammas = [gamma(t) for gamma in self._gammas]
         lindblad_operators = [l_op(t) for l_op in self._lindblad_operators]
         return _liouvillian(hamiltonian, gammas, lindblad_operators)
@@ -619,11 +591,10 @@ class TimeDependentSystemWithNeighbours(BaseSystem):
         if subdiv_limit is None:
             # Sample Liouvillian at dt/4, 3dt/4 to make propagators for first-
             # and second-half timesteps
-            def propagators(step: int, field: complex,
-                            field_derivative: complex):
+            def propagators(step: int, field: ndarray):
                 t = start_time + step * dt
                 first_step = expm(self.liouvillian(t, t+dt/4.0,
-                    field, field_derivative)*dt/2.0)
+                    field, field_derivative)*dt/2.0)    ##query line - will inform later sections of get_propagators so they remin unchanged for now##
                 second_step = expm(self.liouvillian(t, t+dt*3.0/4.0,
                     field, field_derivative)*dt/2.0)
                 return first_step, second_step
@@ -916,7 +887,7 @@ class LatticeMeanFieldSystem(BaseAPIClass):
         self,
         t: float,
         state_list: List[ndarray],
-    ) -> complex:
+    ) -> ndarray:
         """
         Compute the expectation directly.
 
@@ -938,18 +909,7 @@ class LatticeMeanFieldSystem(BaseAPIClass):
         """
         result = self._mean_field_fn(t, state_list)
         
-        # Always return array
-        if isinstance(result, (complex, np.complexfloating)):
-            # Scalar 
-            return np.full(self._n_sites, result, dtype=complex)
-        else:
-            # Already array - ensure it's ndarray and correct length
-            result = np.array(result, dtype=complex)
-            assert len(result) == self._n_sites, \
-                f"mean_field_fn returned array of length {len(result)}, " \
-                f"expected {self._n_sites}"
-            return result
-
+        
     @property
     def system_list(self) -> List[TimeDependentSystemWithMeanField]:
         """The list of site systems."""
