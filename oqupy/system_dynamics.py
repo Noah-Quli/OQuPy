@@ -478,7 +478,6 @@ def compute_dynamics_with_field(
 # Noah's edited code #
 def compute_dynamics_with_neighbours(
         mean_field_system: LatticeMeanFieldSystem,
-        initial_field: complex,
         process_tensor_list: Optional[List[
             Union[BaseProcessTensor, List[BaseProcessTensor]] ]] = None,
         dt: Optional[float] = None,
@@ -491,7 +490,7 @@ def compute_dynamics_with_neighbours(
         liouvillian_epsrel: Optional[float] = INTEGRATE_EPSREL,
         progress_type: Optional[Text] = None) -> MeanFieldDynamics:
     """
-    Compute each system and field dynamics for a MeanFieldSystem
+    Compute each system dynamics for a LatticeMeanFieldSystem
     with (optional) process tensors for each system to account for their
     interaction with their environment.
 
@@ -500,8 +499,6 @@ def compute_dynamics_with_neighbours(
     mean_field_system: LatticeMeanFieldSystem
         The `LatticeMeanFieldSystem` representing the collection of time-dependent
         systems and their lattice neighbours.
-    initial_field: complex
-        The initial field value.
     process_tensor_list: List[Union[List[BaseProcessTensor],BaseProcessTensor]]
         Process tensors for each system. Each element can be a BaseProcessTensor
         or a list of BaseProcessTensors for the respective system.
@@ -535,12 +532,11 @@ def compute_dynamics_with_neighbours(
     -------
     dynamics_with_field: MeanFieldDynamics
         The instance of `MeanFieldDynamics` describing each system
-        dynamics and the field dynamics accounting for the interaction with
+        dynamics accounting for the interaction with
         the environment.
     """
 
     # initialize objects as lists where necessary
-    initial_field = check_convert(initial_field, complex, "initial_field")
 
     assert isinstance(mean_field_system, LatticeMeanFieldSystem), \
             "Argument 'mean_field_system' must be an instance of " \
@@ -548,7 +544,7 @@ def compute_dynamics_with_neighbours(
 
     number_of_systems = len(mean_field_system.system_list)
     assert number_of_systems > 0, "Argument 'mean_field_system.system_list' "\
-            "must contain at least one instance of MeanFieldSystem"
+            "must contain at least one instance of LatticeMeanFieldSystem"
 
     if initial_state_list is None:
         initial_state_list = [None] * number_of_systems
@@ -612,8 +608,8 @@ def compute_dynamics_with_neighbours(
 
     # -- prepare compute field - modified for analagous expectation values --
     def compute_expectation(t: float, dt: float, state_list: List[ndarray],
-            field: complex, next_state_list: List[ndarray]):
-                return lattice_system.compute_expectation(t, state_list)
+            field: ndarray, next_state_list: List[ndarray]):
+                return mean_field_system.compute_expectation(t, state_list)
         
 
     # -- prepare controls --
@@ -642,9 +638,8 @@ def compute_dynamics_with_neighbours(
 
         nodes_and_edges_list.append((current_node, current_edges))
 
-    # initialize list to store system states and field at each time step
+    # initialize list to store system states at each time step
     system_states_list = []
-    field_list = []
     title = "--> Compute dynamics within lattice:"
     prog_bar = get_progress(progress_type)(num_steps, title)
     prog_bar.enter()
@@ -682,14 +677,11 @@ def compute_dynamics_with_neighbours(
                       in zip(state_tensor_list,
                              parsed_parameters_dict["hs_dim"])]
 
-        if step == 0:
-            field = initial_field
-        else:
-            field = compute_expectation(t, dt, previous_state_list, field, state_list)
+        
+        field = compute_expectation(t, dt, previous_state_list, field, state_list)
         previous_state_list = state_list
         if record_all:
             system_states_list.append(state_list)
-            field_list.append(field)
 
         prog_bar.update(step)
 
@@ -702,9 +694,7 @@ def compute_dynamics_with_neighbours(
         ]
 
         # -- propagate one time step --
-        propagator_tuples_list = [propagators(step, field,
-                                mean_field_system.field_eom(t, state_list,
-                                                            field))
+        propagator_tuples_list = [propagators(step, field)
                                 for propagators in propagators_list]
 
         pt_mpos_list = [_get_pt_mpos(process_tensors, step) for process_tensors
@@ -750,10 +740,6 @@ def compute_dynamics_with_neighbours(
 
     system_states_list.append(final_state_list)
 
-    final_field = compute_expectation(t, dt, previous_state_list, field,
-                                final_state_list)
-    field_list.append(final_field)
-
     prog_bar.update(num_steps)
     prog_bar.exit()
 
@@ -764,8 +750,7 @@ def compute_dynamics_with_neighbours(
         times = [start_time + len(system_states_list)*dt]
 
     return MeanFieldDynamics(
-                times=list(times), system_states_list=system_states_list,
-                fields=field_list)
+                times=list(times), system_states_list=system_states_list)
 
 # end # 
 def _compute_dynamics_input_parse(
