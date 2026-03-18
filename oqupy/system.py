@@ -902,10 +902,7 @@ class LatticeMeanFieldSystem(BaseAPIClass):
 
         Returns
         -------
-               field_array : ndarray
-            Array of field values, shape (n_sites,).
-            - If mean_field_fn returns scalar: broadcast to all sites
-            - If mean_field_fn returns array: use directly
+        expectation value
         """
         result = self._mean_field_fn(t, state_list)
         
