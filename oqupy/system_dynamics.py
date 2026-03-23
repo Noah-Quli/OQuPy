@@ -608,7 +608,7 @@ def compute_dynamics_with_neighbours(
 
     # -- prepare compute field - modified for analagous expectation values --
     def compute_expectation(t: float, dt: float, state_list: List[ndarray],
-            field: ndarray, next_state_list: List[ndarray]):
+            expectation: ndarray, next_state_list: List[ndarray]):
                 return mean_field_system.compute_expectation(t, state_list)
         
 
@@ -664,7 +664,7 @@ def compute_dynamics_with_neighbours(
         if step == num_steps:
             break
 
-        # -- extract current states -- update field --
+        # -- extract current states -- 
         caps_list = [_get_caps(process_tensors, step) for process_tensors
                      in parsed_parameters_dict["process_tensors"]]
 
@@ -678,7 +678,7 @@ def compute_dynamics_with_neighbours(
                              parsed_parameters_dict["hs_dim"])]
 
         
-        field = compute_expectation(t, dt, previous_state_list, field, state_list)
+        expectation = compute_expectation(t, dt, previous_state_list, expectation, state_list)
         previous_state_list = state_list
         if record_all:
             system_states_list.append(state_list)
@@ -694,7 +694,7 @@ def compute_dynamics_with_neighbours(
         ]
 
         # -- propagate one time step --
-        propagator_tuples_list = [propagators(step, field)
+        propagator_tuples_list = [propagators(step, expectation)
                                 for propagators in propagators_list]
 
         pt_mpos_list = [_get_pt_mpos(process_tensors, step) for process_tensors
