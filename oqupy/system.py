@@ -505,6 +505,8 @@ class TimeDependentSystemWithNeighbours(BaseSystem):
     ----------
     hamiltonian : callable
         Site Hamiltonian H(t, <a>) with signature (float, ndarray) -> ndarray.
+    state_dim: float 
+        specifies the dimension of the state array for passing to the unitary hamiltonian for tmp_dimension
     gammas : list(callable), optional
         Time-dependent decay rates gamma_n(t).
     lindblad_operators : list(callable), optional
@@ -517,6 +519,7 @@ class TimeDependentSystemWithNeighbours(BaseSystem):
      def __init__(
             self,
             hamiltonian: Callable[[float, ndarray], ndarray],
+            state_dim: float,
             gammas: \
                 Optional[List[Callable[[float], float]]] = None,
             lindblad_operators: \
@@ -527,7 +530,7 @@ class TimeDependentSystemWithNeighbours(BaseSystem):
 
         # input check for Hamiltonian
         self._hamiltonian = _check_tfielddependent_hamiltonian(hamiltonian)
-        tmp_dimension = self._hamiltonian(1.0, 1.0+1.0j).shape[0]
+        tmp_dimension = self._hamiltonian(1.0, [1.0+1.0j]*state_dim).shape[0]
 
         # input check gammas and lindblad_operators
         self._gammas, self._lindblad_operators = \
@@ -541,7 +544,7 @@ class TimeDependentSystemWithNeighbours(BaseSystem):
 
     def liouvillian(self,
             t: float,
-            field: ndarray) -> ndarray:
+            expectation: ndarray) -> ndarray:
         r"""
         Returns the Liouvillian super-operator
         :math:`\mathcal{L}(t, \langle a \rangle)` such that
@@ -562,7 +565,7 @@ class TimeDependentSystemWithNeighbours(BaseSystem):
         ----------
         t: float
             Current time :math:`t`.
-        field: ndarray
+        expectation: ndarray
             expecation value of neighbouring sites is an effective field in this case
         `
 
@@ -577,7 +580,7 @@ class TimeDependentSystemWithNeighbours(BaseSystem):
         except Exception as e:
             raise TypeError("Argument t must be float") from e
         try:
-            field = ndarray(field)
+            expectation = ndarray(expectation)
         except Exception as e:
             raise TypeError("Argument field must be array") from e
         hamiltonian = self._hamiltonian(t, field)
@@ -591,21 +594,20 @@ class TimeDependentSystemWithNeighbours(BaseSystem):
         if subdiv_limit is None:
             # Sample Liouvillian at dt/4, 3dt/4 to make propagators for first-
             # and second-half timesteps
-            def propagators(step: int, field: ndarray):
+            def propagators(step: int, expectation: ndarray):
                 t = start_time + step * dt
                 first_step = expm(self.liouvillian(t, t+dt/4.0,
-                    field, field_derivative)*dt/2.0)    ##query line - will inform later sections of get_propagators so they remin unchanged for now##
+                    expectation)*dt/2.0)    
                 second_step = expm(self.liouvillian(t, t+dt*3.0/4.0,
-                    field, field_derivative)*dt/2.0)
+                    expectation)*dt/2.0)
                 return first_step, second_step
         else:
             # Integrate Liouvillian to make propagators for first- and
             # second-half timesteps
-            def propagators(step: int, field: complex,
-                            field_derivative: complex):
+            def propagators(step: int, expectation: ndarray):
                 t = start_time + step * dt
                 liouvillian = lambda tau: self.liouvillian(t, tau,
-                        field, field_derivative)
+                        expectation)
                 first_step = expm(integrate.quad_vec(liouvillian,
                                                      a=t,
                                                      b=t+dt/2.0,
