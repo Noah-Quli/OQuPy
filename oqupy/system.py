@@ -516,7 +516,7 @@ class TimeDependentSystemWithNeighbours(BaseSystem):
     """
 
   
-     def __init__(
+    def __init__(
             self,
             hamiltonian: Callable[[float, ndarray], ndarray],
             state_dim: float,
@@ -583,7 +583,7 @@ class TimeDependentSystemWithNeighbours(BaseSystem):
             expectation = ndarray(expectation)
         except Exception as e:
             raise TypeError("Argument field must be array") from e
-        hamiltonian = self._hamiltonian(t, field)
+        hamiltonian = self._hamiltonian(t, expectation)
         gammas = [gamma(t) for gamma in self._gammas]
         lindblad_operators = [l_op(t) for l_op in self._lindblad_operators]
         return _liouvillian(hamiltonian, gammas, lindblad_operators)
@@ -596,9 +596,9 @@ class TimeDependentSystemWithNeighbours(BaseSystem):
             # and second-half timesteps
             def propagators(step: int, expectation: ndarray):
                 t = start_time + step * dt
-                first_step = expm(self.liouvillian(t, t+dt/4.0,
+                first_step = expm(self.liouvillian(t+dt/4.0,
                     expectation)*dt/2.0)    
-                second_step = expm(self.liouvillian(t, t+dt*3.0/4.0,
+                second_step = expm(self.liouvillian(t+dt*3.0/4.0,
                     expectation)*dt/2.0)
                 return first_step, second_step
         else:
@@ -906,7 +906,7 @@ class LatticeMeanFieldSystem(BaseAPIClass):
         -------
         expectation value
         """
-        result = self._mean_field_fn(t, state_list)
+        return self._mean_field_fn(t, state_list)
         
         
     @property
