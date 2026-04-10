@@ -1348,44 +1348,30 @@ def _create_density_matrix(dim, seed=1):
     rho = b / b.trace()
     return rho
 # Noah's edited code - new validators #
-def _check_lattice_mean_field_system_list(
-    system_list: list,
-) -> List[TimeDependentSystemWithMeanField]:
-    """Validate that system_list contains TimeDependentSystemWithMeanField objects."""
-    assert isinstance(system_list, list), (
-        "Parameter system_list must be a list of "
-        "TimeDependentSystemWithMeanField objects."
-    )
-    assert len(system_list) > 0, (
-        "Parameter system_list must contain at least one "
-        "TimeDependentSystemWithMeanField object."
-    )
-    for i, obj in enumerate(system_list):
-        assert isinstance(obj, TimeDependentSystemWithMeanField), (
-            f"Element {i} of system_list is a {type(obj).__name__}, "
-            "but must be a TimeDependentSystemWithMeanField object. "
-            "Plain TimeDependentSystemWithField objects are not accepted "
-            "because they have a different propagators() signature."
-        )
+def _check_lattice_mean_field_system_list(system_list):
+    assert isinstance(system_list, list), "Parameter system_list must "\
+            "be a list of TimeDependentSystemWithNeighbours objects."
+    assert len(system_list) > 0, "Parameter system_list must contain at "\
+            "least one TimeDependentSystemWithNeighbours"
+    for obj in system_list:
+        assert isinstance(obj, TimeDependentSystemWithNeighbours), "Each "\
+                "element of system_list must be a "\
+                "TimeDependentSystemWithNeighbours object."
     return system_list
 
 
-def _check_mean_field_fn(
-    dim_list: List[int],
-    mean_field_fn: Callable,
-) -> Callable[[float, List[ndarray]], complex]:
-    """Validate the self-consistency function."""
-    test_rho_list = [_create_density_matrix(dim) for dim in dim_list]
+def _check_lattice_mean_field_system_expectation(dim_list, compute_expectation):
+    """Input check an expectation value computation for a lattice mean-field-system"""
+    test_matrix_list = [_create_density_matrix(dim) for dim in dim_list]
+    test_field = 1.0+1.0j
+    test_time = 1.0
     try:
-        value = mean_field_fn(1.0, test_rho_list)
-        complex(value)
+        value = compute_expectation(test_time, test_matrix_list, test_field)
+        ndarray(value)
     except Exception as e:
-        raise AssertionError(
-            "mean_field_fn must be callable with signature "
-            "f(t: float, rho_list: List[ndarray]) -> complex, "
-            "where rho_list contains square matrices with shapes "
-            + str([f"({d}, {d})" for d in dim_list])
-            + f". Got exception: {e}"
-        ) from e
-    return mean_field_fn
+        raise AssertionError("Computation of expectation values must "\
+                "take a time, a list of matrices with shapes\n "\
+                + str([f"({dim}, {dim})" for dim in dim_list]) \
+                + " and return an array.") from e
+    return compute_expectation
 # end #
