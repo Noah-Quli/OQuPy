@@ -867,57 +867,33 @@ class LatticeMeanFieldSystem(BaseAPIClass):
     description : str, optional
     """
 
-    def __init__(
-        self,
-        system_list: List[TimeDependentSystemWithMeanField],
-        mean_field_fn: Callable[[float, List[ndarray]], complex],
-        name: Optional[Text] = None,
-        description: Optional[Text] = None,
-    ) -> None:
-        """Create a LatticeMeanFieldSystem."""
+    def __init__(self,
+                system_list: List[TimeDependentSystemWithNeighbours],
+                sys_dim: float
+                copmute_expectation: Callable[[float, List[ndarray], ndarray], ndarray],
+                name: Optional[Text] = None,
+                description: Optional[Text] = None) -> None:
+
         super().__init__(name, description)
+        tmp_system_list = _check_lattice_mean_field_system_list(system_list)
+        self._system_list = tmp_system_list
 
-        self._system_list = _check_lattice_mean_field_system_list(system_list)
+        # input check for field equation of motion
+        tmp_dimension_list = [system.hamiltonian(1.0, [1.0+1.0j]*sys_dim).shape[0]
+                              for system in self.system_list]
+        tmp_compute_expectation = _check_lattice_mean_field_system_expectation(tmp_dimension_list,
+                                                     compute_expectation)
+        self._compute_expectation = tmp_compute_expectation
 
-        tmp_dim_list = [
-            sys.hamiltonian(1.0, 1.0 + 1.0j).shape[0]
-            for sys in self._system_list
-        ]
-        self._mean_field_fn = _check_mean_field_fn(tmp_dim_list, mean_field_fn)
-
-    def compute_expectation(
-        self,
-        t: float,
-        state_list: List[ndarray],
-    ) -> ndarray:
-        """
-        Compute the expectation directly.
-
-        
-
-        Parameters
-        ----------
-        t : float
-            Current time.
-        state_list : list[ndarray]
-            Current density matrices.
-
-        Returns
-        -------
-        expectation value
-        """
-        return self._mean_field_fn(t, state_list)
-        
-        
     @property
-    def system_list(self) -> List[TimeDependentSystemWithMeanField]:
-        """The list of site systems."""
+    def system_list(self) -> List[TimeDependentSystemWithNeighbours]:
+        """The list of systems interacting within a lattice. """
         return self._system_list
 
     @property
-    def mean_field_fn(self) -> Callable[[float, List[ndarray]], complex]:
-        """The self-consistency function f(t, [rho_i]) -> complex."""
-        return copy(self._mean_field_fn)
+    def compute_expectation(self) -> Callable[[float, List[ndarray], ndarray], ndarray]:
+        """The expectation value of neighbours """
+        return copy(self._compute_expectation)
 # end # 
 
 class SystemChain(BaseAPIClass):
