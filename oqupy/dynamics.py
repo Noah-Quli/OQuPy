@@ -318,7 +318,7 @@ def _parse_times_fields(times, fields) -> Tuple[List[float],
     if times is None:
         times = []
     if fields is None:
-        fields = []
+        fields = [None]*len(times)
     assert isinstance(times, list), \
         "Argument `times` must be a list."
     assert isinstance(fields, list), \
@@ -354,6 +354,8 @@ def _parse_state(state, previous_shape) -> Tuple[ndarray, Tuple[int]]:
     return tmp_state, tmp_shape
 
 def _parse_field(field) -> complex:
+    if field is None:
+        return None
     try:
         tmp_field = complex(field)
     except Exception as e:
