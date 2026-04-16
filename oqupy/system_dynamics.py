@@ -26,7 +26,7 @@ from oqupy.config import NpDtype, INTEGRATE_EPSREL, SUBDIV_LIMIT
 from oqupy.control import Control
 from oqupy.dynamics import Dynamics, MeanFieldDynamics
 from oqupy.process_tensor import BaseProcessTensor
-from oqupy.system import BaseSystem, System, TimeDependentSystem, 
+from oqupy.system import BaseSystem, System, TimeDependentSystem
 from oqupy.system import ParameterizedSystem
 from oqupy.system import MeanFieldSystem
 from oqupy.operators import left_super, right_super
