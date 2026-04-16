@@ -1376,7 +1376,7 @@ def _check_lattice_mean_field_system_expectation(dim_list, compute_expectation):
     test_time = 1.0
     try:
         value = compute_expectation(test_time, test_matrix_list)
-        ndarray(value)
+        np.array(value)
     except Exception as e:
         raise AssertionError("Computation of expectation values must "\
                 "take a time, a list of matrices with shapes\n "\
