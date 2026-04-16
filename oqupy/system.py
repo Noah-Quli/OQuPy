@@ -529,7 +529,7 @@ class TimeDependentSystemWithNeighbours(BaseSystem):
         """Create a TimeDependentSystemWithField object."""
 
         # input check for Hamiltonian
-        self._hamiltonian =  _check_tneighbourdependent_hamiltonian(hamiltonian)
+        self._hamiltonian =  _check_tneighbourdependent_hamiltonian(hamiltonian, state_dim)
         tmp_dimension = self._hamiltonian(1.0, [1.0+1.0j]*state_dim).shape[0]
 
         # input check gammas and lindblad_operators
