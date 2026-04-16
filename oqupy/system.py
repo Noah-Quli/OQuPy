@@ -1350,13 +1350,13 @@ def _create_density_matrix(dim, seed=1):
 # Noah's edited code - new validators #
 def _check_tneighbourdependent_hamiltonian(hamiltonian, state_dim):
     try:
-        tmp_hamiltonian = np.vectorize(hamiltonian)
-        _check_hamiltonian(tmp_hamiltonian(1.0, [1.0+1.0j]*state_dim))
+        test_neighbours = [1.0+1.0j] * state_dim
+        _check_hamiltonian(hamiltonian(1.0, test_neighbours))
     except Exception as e:
         raise AssertionError(
-            "Time and neighbour dependent Hamiltonian must be vectorizable "
-            "callable with signature (float, array) -> ndarray.") from e
-    return tmp_hamiltonian
+            "Time and neighbour dependent Hamiltonian must be callable "
+            "with signature (float, array) -> ndarray.") from e
+    return hamiltonian
     
 def _check_lattice_mean_field_system_list(system_list):
     assert isinstance(system_list, list), "Parameter system_list must "\
