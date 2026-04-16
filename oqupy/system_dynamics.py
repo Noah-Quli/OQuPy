@@ -26,13 +26,15 @@ from oqupy.config import NpDtype, INTEGRATE_EPSREL, SUBDIV_LIMIT
 from oqupy.control import Control
 from oqupy.dynamics import Dynamics, MeanFieldDynamics
 from oqupy.process_tensor import BaseProcessTensor
-from oqupy.system import BaseSystem, System, TimeDependentSystem
+from oqupy.system import BaseSystem, System, TimeDependentSystem, 
 from oqupy.system import ParameterizedSystem
 from oqupy.system import MeanFieldSystem
 from oqupy.operators import left_super, right_super
 from oqupy.util import check_convert, check_isinstance, check_true
 from oqupy.util import get_progress
-
+#New imports from edited code #
+from oqupy.system import TimeDependentSystemWithNeighbours
+from oqupy.system import LatticeMeanFieldSystem
 
 Indices = Union[int, slice, List[Union[int, slice]]]
 
@@ -643,6 +645,9 @@ def compute_dynamics_with_neighbours(
     title = "--> Compute dynamics within lattice:"
     prog_bar = get_progress(progress_type)(num_steps, title)
     prog_bar.enter()
+                
+    previous_state_list = parsed_parameters_dict["initial_state"]
+    expectation = mean_field_system.compute_expectation(start_time, parsed_parameters_dict["initial_state"])
 
     for step in range(num_steps+1):
 
@@ -762,7 +767,7 @@ def _compute_dynamics_input_parse(
     else:
         check_isinstance(
             system,
-            (System, TimeDependentSystem, ParameterizedSystem),
+            (System, TimeDependentSystem, ParameterizedSystem, TimeDependentSystemWithNeighbours),
             "system"
         )
 
