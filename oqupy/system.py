@@ -529,7 +529,7 @@ class TimeDependentSystemWithNeighbours(BaseSystem):
         """Create a TimeDependentSystemWithField object."""
 
         # input check for Hamiltonian
-        self._hamiltonian = _check_tfielddependent_hamiltonian(hamiltonian)
+        self._hamiltonian =  _check_tneighbourdependent_hamiltonian(hamiltonian)
         tmp_dimension = self._hamiltonian(1.0, [1.0+1.0j]*state_dim).shape[0]
 
         # input check gammas and lindblad_operators
@@ -1348,6 +1348,16 @@ def _create_density_matrix(dim, seed=1):
     rho = b / b.trace()
     return rho
 # Noah's edited code - new validators #
+def _check_tneighbourdependent_hamiltonian(hamiltonian, state_dim):
+    try:
+        tmp_hamiltonian = np.vectorize(hamiltonian)
+        _check_hamiltonian(tmp_hamiltonian(1.0, [1.0+1.0j]*state_dim))
+    except Exception as e:
+        raise AssertionError(
+            "Time and neighbour dependent Hamiltonian must be vectorizable "
+            "callable with signature (float, array) -> ndarray.") from e
+    return tmp_hamiltonian
+    
 def _check_lattice_mean_field_system_list(system_list):
     assert isinstance(system_list, list), "Parameter system_list must "\
             "be a list of TimeDependentSystemWithNeighbours objects."
