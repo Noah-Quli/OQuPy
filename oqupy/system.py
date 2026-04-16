@@ -859,7 +859,7 @@ class LatticeMeanFieldSystem(BaseAPIClass):
 
     Parameters
     ----------
-    system_list : list[TimeDependentSystemWithMeanField]
+    system_list : list[TimeDependentSystemWithNeighbours]
         Site objects.
     mean_field_fn : callable
         Self-consistency function f(t, [rho_i]) -> complex.
@@ -869,8 +869,8 @@ class LatticeMeanFieldSystem(BaseAPIClass):
 
     def __init__(self,
                 system_list: List[TimeDependentSystemWithNeighbours],
-                sys_dim: float
-                copmute_expectation: Callable[[float, List[ndarray], ndarray], ndarray],
+                sys_dim: float,
+                compute_expectation: Callable[[float, List[ndarray], ndarray], ndarray],
                 name: Optional[Text] = None,
                 description: Optional[Text] = None) -> None:
 
