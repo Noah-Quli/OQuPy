@@ -578,7 +578,7 @@ def compute_dynamics_with_neighbours(
     # list of tuples in the order: system, initial_state, dt, num_steps,
     # start_time, process_tensors, control, record_all, hs_dim
     parsed_parameters_tuple_list =  \
-            [_compute_dynamics_input_parse(True, system, initial_state, dt,
+            [_compute_dynamics_input_parse(False, system, initial_state, dt,
                 num_steps, start_time, process_tensor, control, record_all)
                 for system, initial_state, process_tensor, control
                 in zip(mean_field_system.system_list, initial_state_list,
