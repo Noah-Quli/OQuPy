@@ -580,7 +580,7 @@ class TimeDependentSystemWithNeighbours(BaseSystem):
         except Exception as e:
             raise TypeError("Argument t must be float") from e
         try:
-            expectation = ndarray(expectation)
+            expectation = np.array(expectation)
         except Exception as e:
             raise TypeError("Argument field must be array") from e
         hamiltonian = self._hamiltonian(t, expectation)
